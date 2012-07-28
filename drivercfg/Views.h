@@ -218,6 +218,7 @@ public:
 		   reg.Close();
 		   vst_info.SetWindowText(vst_path);
 		  load_vst(vst_path);
+		  vst_configure.EnableWindow(!!(effect->flags & effFlagsHasEditor));
 	   }
 	   
    }
@@ -241,7 +242,7 @@ public:
 			   reg.SetStringValue(L"plugin",szFileName);
 			   reg.Close();
 			   vst_info.SetWindowText(szFileName);
-			   load_settings();
+			   vst_configure.EnableWindow(!!(effect->flags & effFlagsHasEditor));
 		   }
 		   // do stuff
 	   }
@@ -250,7 +251,7 @@ public:
 
    LRESULT OnButtonConfig(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/ )
    {
-	   if(effect)
+	   if(effect && effect->flags & effFlagsHasEditor)
 	   {
 		   MyDLGTEMPLATE t;	
 		   t.style = WS_POPUPWINDOW|WS_DLGFRAME|DS_MODALFRAME|DS_CENTER;
