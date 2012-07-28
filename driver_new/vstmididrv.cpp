@@ -56,6 +56,7 @@ static volatile int modm_closed = 1;
 
 static CRITICAL_SECTION mim_section;
 static volatile int stop_thread = 0;
+static volatile int reset_synth = 0;
 static HANDLE hCalcThread = NULL;
 static DWORD processPriority;
 static HANDLE load_vstevent = NULL; 
@@ -221,8 +222,6 @@ int vstsyn_buf_check(void){
 	return retval;
 }
 
-static const unsigned char sysex_gm_reset[] = { 0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7 };
-
 int vstsyn_play_some_data(void){
 	UINT uMsg;
 	DWORD	dwParam1;
@@ -296,30 +295,39 @@ BOOL IsVistaOrNewer() {
 
 unsigned __stdcall threadfunc(LPVOID lpV){
 	unsigned i;
-	int opend=0;
+	int opend;
+
+reset:
+	opend = 0;
 
 	while(opend == 0 && stop_thread == 0) {
 		Sleep(100);
-		sound_driver = create_sound_out_ds();
-		const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!IsVistaOrNewer(), 44 * 2, 100);
-		if (err) {
-			delete sound_driver;
-			sound_driver = NULL;
-			continue;
+		if (sound_driver == NULL) {
+			sound_driver = create_sound_out_ds();
+			const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!IsVistaOrNewer(), 44 * 2, 100);
+			if (err) {
+				delete sound_driver;
+				sound_driver = NULL;
+				continue;
+			}
 		}
 		vst_driver = new VSTDriver;
 		if (!vst_driver->OpenVSTDriver()) {
 			delete vst_driver;
 			vst_driver = NULL;
-			delete sound_driver;
-			sound_driver = NULL;
 			continue;
 		}
-		SetEvent(load_vstevent);
+		if (load_vstevent) SetEvent(load_vstevent);
 		opend = 1;
 	}
 
 	while(stop_thread == 0){
+		if (reset_synth != 0){
+			reset_synth = 0;
+			delete vst_driver;
+			vst_driver = NULL;
+			goto reset;
+		}
 		vstsyn_play_some_data();
 		if (IsVistaOrNewer()) {
 			float sound_buffer[44 * 2];
@@ -365,6 +373,7 @@ void DoStartDriver() {
 		if (result == WAIT_OBJECT_0)
 		{
 			CloseHandle(load_vstevent);
+			load_vstevent = NULL;
 		}
 		modm_closed = 0;
 	}
@@ -382,20 +391,7 @@ void DoStopDriver() {
 }
 
 void DoResetDriver(DWORD dwParam1, DWORD dwParam2) {
-	UINT evbpoint;
-	int exlen = _countof(sysex_gm_reset);
-	unsigned char *sysexbuffer = (unsigned char*) malloc(exlen);
-	memcpy(sysexbuffer, sysex_gm_reset, exlen);
-	EnterCriticalSection(&mim_section);
-	evbpoint = evbwpoint;
-	if (++evbwpoint >= EVBUFF_SIZE)
-		evbwpoint -= EVBUFF_SIZE;
-	evbuf[evbpoint].uMsg = MODM_LONGDATA;
-	evbuf[evbpoint].dwParam1 = dwParam1;
-	evbuf[evbpoint].dwParam2 = dwParam2;
-	evbuf[evbpoint].exlen=exlen;
-	evbuf[evbpoint].sysexbuffer=sysexbuffer;
-	LeaveCriticalSection(&mim_section);
+	reset_synth = 1;
 }
 
 LONG DoOpenDriver(struct Driver *driver, UINT uDeviceID, UINT uMsg, DWORD dwUser, DWORD dwParam1, DWORD dwParam2) {
