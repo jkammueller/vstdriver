@@ -8,6 +8,7 @@ using namespace std;
 using namespace utf8util;
 #include "../driver/src/inc/aeffect.h"
 #include "../driver/src/inc/aeffectx.h"
+#include "../common/settings.h"
 typedef AEffect* (*PluginEntryProc) (audioMasterCallback audioMaster);
 static INT_PTR CALLBACK EditorProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -44,45 +45,23 @@ void settings_load(AEffect * effect)
 		lResult = reg.QueryStringValue(L"plugin",NULL,&size);
 		if (lResult == ERROR_SUCCESS) {
 			reg.QueryStringValue(L"plugin",vst_path,&size);
-			if (effect->flags & effFlagsProgramChunks) {
-				wstring ext = vst_path;
-				fname = stripExtension(ext);
-				fname += L".set";
-				file.open(fname,ifstream::binary);
-				if (file.good())
-				{
-					file.seekg(0,ifstream::end);
-					unsigned int chunk_size = file.tellg();
-					file.seekg(0);
-					char *buffer =new char[chunk_size];
-					file.read(buffer,chunk_size);
-					effect->dispatcher(effect, effSetChunk, 1, chunk_size, buffer, 0.0f);
-					delete [] buffer ;
-				}
-				file.close();
-			}
-			else
+			wstring ext = vst_path;
+			fname = stripExtension(ext);
+			fname += L".set";
+			file.open(fname,ifstream::binary);
+			if (file.good())
 			{
-				wstring ext = vst_path;
-				fname = stripExtension(ext);
-				fname += L".set";
-				file.open(fname);
-				if (file.good())
-				{
-
-					float fval;
-					int index = 0;
-					for(VstInt32 paramIndex = 0; paramIndex < effect->numParams; paramIndex++)
-					{
-						file >> fval;
-						effect->setParameter(effect,paramIndex,fval);
-						if(file.eof()) break;
-					}
-				}
-				file.close();
+				file.seekg(0,ifstream::end);
+				unsigned int chunk_size = file.tellg();
+				file.seekg(0);
+				vector<uint8_t> chunk;
+				chunk.resize( chunk_size );
+				file.read( (char*) chunk.data(), chunk_size );
+				setChunk( effect, chunk );
+			}
+			file.close();
 		}
 		reg.Close();
-	}
 	}
 }
 
@@ -99,36 +78,17 @@ void settings_save(AEffect * effect)
 		lResult = reg.QueryStringValue(L"plugin",NULL,&size);
 		if (lResult == ERROR_SUCCESS) {
 			reg.QueryStringValue(L"plugin",vst_path,&size);
-			if (effect->flags & effFlagsProgramChunks) {
-				wstring ext = vst_path;
-				fname = stripExtension(ext);
-				fname += L".set";
-				file.open(fname,ofstream::binary);
-				if (file.good())
-				{
-					char *buffer=0;
-					unsigned int chunk_size = effect->dispatcher(effect, effGetChunk, 1, 0, &buffer, false);
-					file.write(buffer,chunk_size);
-				}
-				file.close();
-			}
-			else
+			wstring ext = vst_path;
+			fname = stripExtension(ext);
+			fname += L".set";
+			file.open(fname,ofstream::binary);
+			if (file.good())
 			{
-				wstring ext = vst_path;
-				fname = stripExtension(ext);
-				fname += L".set";
-				file.open(fname);
-				if (file.good())
-				{
-					int index = 0;
-					for(VstInt32 paramIndex = 0; paramIndex < effect->numParams; paramIndex++)
-					{
-						float val = effect->getParameter(effect,paramIndex);
-						file << val;
-					}
-				}
-				file.close();
+				vector<uint8_t> chunk;
+				getChunk( effect, chunk );
+				file.write( ( const char * ) chunk.data(), chunk.size() );
 			}
+			file.close();
 		}
 		reg.Close();
 	}

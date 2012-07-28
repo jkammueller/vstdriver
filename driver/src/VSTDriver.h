@@ -18,10 +18,13 @@
 #define __VSTDRIVER_H__
 
 #include <windows.h>
+#include <malloc.h>
 #include <stdio.h>
 #include <tchar.h>
 #include "inc/aeffect.h"
 #include "inc/aeffectx.h"
+#include <cstdint>
+#include <vector>
 
 class VSTDriver {
 private:
@@ -29,6 +32,8 @@ private:
 
 	HMODULE      hDll;
 	AEffect    * pEffect;
+
+	std::vector<std::uint8_t> blChunk;
 
 	unsigned char * blState;
 	unsigned buffer_size;
@@ -59,8 +64,9 @@ public:
 	void CloseVSTDriver();
 	BOOL OpenVSTDriver();
 	void ProcessMIDIMessage(DWORD dwParam1);
-	void ProcessSysEx(unsigned char *sysexbuffer,int exlen);
+	void ProcessSysEx(const unsigned char *sysexbuffer,int exlen);
 	void Render(short * samples, int len);
+	void RenderFloat(float * samples, int len);
 };
 
 #endif

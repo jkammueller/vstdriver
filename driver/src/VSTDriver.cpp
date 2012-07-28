@@ -16,6 +16,8 @@
 
 #include "VSTDriver.h"
 
+#include "../../common/settings.h"
+
 #define BUFFER_SIZE 4096
 
 static VstIntPtr VSTCALLBACK audioMaster(AEffect *effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void *ptr, float opt)
@@ -74,6 +76,26 @@ void VSTDriver::load_settings() {
 		if ( lResult == ERROR_SUCCESS && dwType == REG_SZ ) {
 			szPluginPath = (TCHAR*) calloc( dwSize + sizeof(TCHAR), 1 );
 			RegQueryValueEx(hKey, _T("plugin"), NULL, &dwType, (LPBYTE) szPluginPath, &dwSize);
+
+			blChunk.resize( 0 );
+
+			const TCHAR * dot = _tcsrchr( szPluginPath, _T('.') );
+			if ( !dot ) dot = szPluginPath + _tcslen( szPluginPath );
+			TCHAR * szSettingsPath = ( TCHAR * ) _alloca( ( dot - szPluginPath + 5 ) * sizeof( TCHAR ) );
+			_tcsncpy( szSettingsPath, szPluginPath, dot - szPluginPath );
+			_tcscpy( szSettingsPath + ( dot - szPluginPath ), _T(".set") );
+
+			FILE * f;
+			errno_t err = _tfopen_s( &f, szSettingsPath, _T("rb") );
+			if ( !err )
+			{
+				fseek( f, 0, SEEK_END );
+				size_t chunk_size = ftell( f );
+				fseek( f, 0, SEEK_SET );
+				blChunk.resize( chunk_size );
+				fread( blChunk.data(), 1, chunk_size, f );
+				fclose( f );
+			}
 		}
 		RegCloseKey( hKey);
 	}
@@ -145,22 +167,7 @@ BOOL VSTDriver::OpenVSTDriver() {
 
 				if ( pEffect->dispatcher( pEffect, effGetPlugCategory, 0, 0, 0, 0 ) == kPlugCategSynth &&
 					pEffect->dispatcher( pEffect, effCanDo, 0, 0, "sendVstMidiEvent", 0 ) ) {
-						if ( pEffect->uniqueID == 'd2w1' ) { // Yamaha S-YXG50
-							static const unsigned char def_syxg50_partial[] = { 0x44, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74,
-								0x20, 0x53, 0x65, 0x74, 0x75, 0x70, 0 };
-
-							void * chunk;
-							VstIntPtr size = pEffect->dispatcher( pEffect, effGetChunk, 0, 0, &chunk, 0 );
-							if ( size == 0x21 && !memcmp( chunk, &def_syxg50_partial, sizeof( def_syxg50_partial ) ) ) {
-								unsigned char * temp_chunk = ( unsigned char * ) malloc( 0x21 );
-								memcpy( temp_chunk, chunk, size );
-								temp_chunk[ 0x1C ] = 128; // 128 polyphony
-								pEffect->dispatcher( pEffect, effSetChunk, 0, size, temp_chunk, 0 );
-								free( temp_chunk );
-							}
-						} else if ( pEffect->uniqueID == 'VSCP' ) { // Edirol Virtual Sound Canvas
-							pEffect->setParameter( pEffect, 1, 0 ); // GS mode
-						}
+						setChunk( pEffect, blChunk );
 
 						return TRUE;
 				}
@@ -181,7 +188,7 @@ void VSTDriver::ProcessMIDIMessage(DWORD dwParam1) {
 	memcpy( &ev->ev.midiEvent.midiData, &dwParam1, sizeof( dwParam1 ) );
 }
 
-void VSTDriver::ProcessSysEx(unsigned char *sysexbuffer,int exlen) {
+void VSTDriver::ProcessSysEx(const unsigned char *sysexbuffer,int exlen) {
 	myVstEvent * ev = ( myVstEvent * ) calloc( sizeof( myVstEvent ), 1 );
 	if ( evTail ) evTail->next = ev;
 	evTail = ev;
@@ -193,7 +200,7 @@ void VSTDriver::ProcessSysEx(unsigned char *sysexbuffer,int exlen) {
 	memcpy( ev->ev.sysexEvent.sysexDump, sysexbuffer, exlen );
 }
 
-void VSTDriver::Render(short * samples, int len) {
+void VSTDriver::RenderFloat(float * samples, int len) {
 	if ( !buffer_size ) {
 		pEffect->dispatcher(pEffect, effSetSampleRate, 0, 0, 0, 44100);
 		pEffect->dispatcher(pEffect, effSetBlockSize, 0, BUFFER_SIZE, 0, 0);
@@ -254,18 +261,15 @@ void VSTDriver::Render(short * samples, int len) {
 
 		if ( uNumOutputs == 2 ) {
 			for (unsigned i = 0; i < len_to_do; i++) {
-				int sample = ( float_out[i] * 32768.f );
-				if ( sample != (short)sample ) sample = 0x7FFF ^ (sample >> 31);
+				float sample = float_out[i];
 				samples[0] = sample;
-				sample = ( float_out[i + BUFFER_SIZE] * 32768.f );
-				if ( sample != (short)sample ) sample = 0x7FFF ^ (sample >> 31);
+				sample = float_out[i + BUFFER_SIZE];
 				samples[1] = sample;
 				samples += 2;
 			}
 		} else {
 			for (unsigned i = 0; i < len_to_do; i++) {
-				int sample = ( float_out[i] * 32768.f );
-				if ( sample != (short)sample ) sample = 0x7FFF ^ (sample >> 31);
+				float sample = float_out[i];
 				samples[0] = sample;
 				samples[1] = sample;
 				samples += 2;
@@ -280,4 +284,21 @@ void VSTDriver::Render(short * samples, int len) {
 	}
 
 	FreeChain();
+}
+
+void VSTDriver::Render(short * samples, int len)
+{
+	float * float_out = (float *) _alloca( 512 * 2 * sizeof(*float_out) );
+	while ( len > 0 )
+	{
+		int len_todo = len > 512 ? 512 : len;
+		RenderFloat( float_out, len_todo );
+		for ( int i = 0; i < len_todo * 2; i++ )
+		{
+			int sample = ( float_out[i] * 32768.f );
+			if ( sample != (short)sample ) sample = 0x7FFF ^ (sample >> 31);
+			samples[0] = sample;
+			samples++;
+		}
+	}
 }
