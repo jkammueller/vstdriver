@@ -221,21 +221,6 @@ int vstsyn_buf_check(void){
 }
 
 static const unsigned char sysex_gm_reset[] = { 0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7 };
-static const unsigned char sysex_gm2_reset[]= { 0xF0, 0x7E, 0x7F, 0x09, 0x03, 0xF7 };
-static const unsigned char sysex_gs_reset[] = { 0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7 };
-static const unsigned char sysex_xg_reset[] = { 0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7 };
-
-static BOOL is_gs_reset(const unsigned char * data, unsigned size)
-{
-	if ( size != _countof( sysex_gs_reset ) ) return FALSE;
-
-	if ( memcmp( data, sysex_gs_reset, 5 ) != 0 ) return FALSE;
-	if ( memcmp( data + 7, sysex_gs_reset + 7, 2 ) != 0 ) return  FALSE;
-	if ( ( ( data[ 5 ] + data[ 6 ] + 1 ) & 127 ) != data[ 9 ] ) return  FALSE;
-	if ( data[ 10 ] != sysex_gs_reset[ 10 ] ) return  FALSE;
-
-	return TRUE;
-}
 
 int vstsyn_play_some_data(void){
 	UINT uMsg;
