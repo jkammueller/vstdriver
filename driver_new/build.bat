@@ -1,1 +1,1 @@
-@cl /O1 /MT /DUNICODE /D_UNICODE /EHsc /LD /Iinc /I..\driver\src /I..\driver\src\inc vstmididrv.cpp sound_out_dsound.cpp dsound.cpp sound_out_xaudio2.cpp ..\driver\src\VSTDriver.cpp user32.lib Shlwapi.lib advapi32.lib winmm.lib vstmididrv.def
+@cl /O1 /MT /DUNICODE /D_UNICODE /EHsc /LD /I..\driver\src /I..\driver\src\inc vstmididrv.cpp sound_out_dsound.cpp dsound.cpp ..\driver\src\VSTDriver.cpp user32.lib Shlwapi.lib advapi32.lib winmm.lib vstmididrv.def

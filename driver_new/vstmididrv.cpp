@@ -314,13 +314,8 @@ unsigned __stdcall threadfunc(LPVOID lpV){
 
 	while(opend == 0 && stop_thread == 0) {
 		Sleep(100);
-		sound_driver = create_sound_out_xaudio2();
-		const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!IsVistaOrNewer(), 44, 50);
-		if (err) {
-			delete sound_driver;
-			sound_driver = create_sound_out_ds();
-			err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!IsVistaOrNewer(), 44, 70);
-		}
+		sound_driver = create_sound_out_ds();
+		const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!IsVistaOrNewer(), 44 * 2, 70);
 		if (err) {
 			delete sound_driver;
 			sound_driver = NULL;
