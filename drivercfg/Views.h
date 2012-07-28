@@ -203,6 +203,9 @@ public:
 	   COMMAND_ID_HANDLER(IDC_VSTCONFIG,OnButtonConfig)
    END_MSG_MAP()
 
+   CView1() { effect = NULL; }
+   ~CView1() { free_vst(); }
+
    void load_settings()
    {
 	   long lResult;
