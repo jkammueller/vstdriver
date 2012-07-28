@@ -1,0 +1,5 @@
+LIBRARY      "vstmididrv.dll"
+EXPORTS
+	DriverProc PRIVATE
+	modMessage PRIVATE
+	midMessage PRIVATE
