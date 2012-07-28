@@ -21,6 +21,7 @@ void _endthreadex( unsigned retval );
 #include <windows.h>
 #include "mmddk.h"  
 #include <mmsystem.h>
+#include <mmreg.h>
 #include <tchar.h>
 #include <Shlwapi.h>
 
@@ -143,8 +144,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 	switch (capsSize) {
 	case (sizeof(MIDIOUTCAPSA)):
 		myCapsA = (MIDIOUTCAPSA *)capsPtr;
-		myCapsA->wMid = 0xffff;
-		myCapsA->wPid = 0xffff;
+		myCapsA->wMid = MM_UNMAPPED;
+		myCapsA->wPid = MM_MPU401_MIDIOUT;
 		memcpy(myCapsA->szPname, synthName, sizeof(synthName));
 		myCapsA->wTechnology = MOD_MIDIPORT;
 		myCapsA->vDriverVersion = 0x0090;
@@ -156,8 +157,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 
 	case (sizeof(MIDIOUTCAPSW)):
 		myCapsW = (MIDIOUTCAPSW *)capsPtr;
-		myCapsW->wMid = 0xffff;
-		myCapsW->wPid = 0xffff;
+		myCapsW->wMid = MM_UNMAPPED;
+		myCapsW->wPid = MM_MPU401_MIDIOUT;
 		memcpy(myCapsW->szPname, synthNameW, sizeof(synthNameW));
 		myCapsW->wTechnology = MOD_MIDIPORT;
 		myCapsW->vDriverVersion = 0x0090;
@@ -169,8 +170,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 
 	case (sizeof(MIDIOUTCAPS2A)):
 		myCaps2A = (MIDIOUTCAPS2A *)capsPtr;
-		myCaps2A->wMid = 0xffff;
-		myCaps2A->wPid = 0xffff;
+		myCaps2A->wMid = MM_UNMAPPED;
+		myCaps2A->wPid = MM_MPU401_MIDIOUT;
 		memcpy(myCaps2A->szPname, synthName, sizeof(synthName));
 		myCaps2A->wTechnology = MOD_MIDIPORT;
 		myCaps2A->vDriverVersion = 0x0090;
@@ -182,8 +183,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 
 	case (sizeof(MIDIOUTCAPS2W)):
 		myCaps2W = (MIDIOUTCAPS2W *)capsPtr;
-		myCaps2W->wMid = 0xffff;
-		myCaps2W->wPid = 0xffff;
+		myCaps2W->wMid = MM_UNMAPPED;
+		myCaps2W->wPid = MM_MPU401_MIDIOUT;
 		memcpy(myCaps2W->szPname, synthNameW, sizeof(synthNameW));
 		myCaps2W->wTechnology = MOD_MIDIPORT;
 		myCaps2W->vDriverVersion = 0x0090;
