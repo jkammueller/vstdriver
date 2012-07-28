@@ -300,5 +300,6 @@ void VSTDriver::Render(short * samples, int len)
 			samples[0] = sample;
 			samples++;
 		}
+		len -= len_todo;
 	}
 }
