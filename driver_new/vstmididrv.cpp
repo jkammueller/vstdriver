@@ -296,6 +296,7 @@ BOOL IsVistaOrNewer() {
 unsigned __stdcall threadfunc(LPVOID lpV){
 	unsigned i;
 	int opend;
+	BOOL floating_point;
 
 reset:
 	opend = 0;
@@ -303,8 +304,12 @@ reset:
 	while(opend == 0 && stop_thread == 0) {
 		Sleep(100);
 		if (sound_driver == NULL) {
-			sound_driver = create_sound_out_ds();
-			const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!IsVistaOrNewer(), 44 * 2, 100);
+			sound_driver = create_sound_out_xaudio2();
+			const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = TRUE, 44 * 2, 60);
+			if (err) {
+				sound_driver = create_sound_out_ds();
+				err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!(floating_point = IsVistaOrNewer()), 44 * 2, 100);
+			}
 			if (err) {
 				delete sound_driver;
 				sound_driver = NULL;
@@ -329,7 +334,7 @@ reset:
 			goto reset;
 		}
 		vstsyn_play_some_data();
-		if (IsVistaOrNewer()) {
+		if (floating_point) {
 			float sound_buffer[44 * 2];
 			vst_driver->RenderFloat( sound_buffer, 44 );
 			sound_driver->write_frame( sound_buffer, 44 * 2, true );
