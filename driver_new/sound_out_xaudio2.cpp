@@ -70,12 +70,15 @@ public:
 
 	HRESULT STDMETHODCALLTYPE OnDefaultDeviceChanged( EDataFlow flow, ERole role, LPCWSTR pwstrDeviceId )
 	{
-		EnterCriticalSection( &lock );
-		for ( auto it = instances.begin(); it < instances.end(); ++it )
+		if ( flow == eRender )
 		{
-			xaudio2_device_changed( *it );
+			EnterCriticalSection( &lock );
+			for ( auto it = instances.begin(); it < instances.end(); ++it )
+			{
+				xaudio2_device_changed( *it );
+			}
+			LeaveCriticalSection( &lock );
 		}
-		LeaveCriticalSection( &lock );
 
 		return S_OK;
 	}
