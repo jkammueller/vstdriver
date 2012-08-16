@@ -221,7 +221,7 @@ public:
 		   reg.Close();
 		   vst_info.SetWindowText(vst_path);
 		  load_vst(vst_path);
-		  vst_configure.EnableWindow(!!(effect->flags & effFlagsHasEditor));
+		 if(effect) vst_configure.EnableWindow(!!(effect->flags & effFlagsHasEditor));
 	   }
 	   
    }
