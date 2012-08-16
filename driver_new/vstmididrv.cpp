@@ -314,6 +314,7 @@ reset:
 				delete sound_driver;
 				sound_driver = create_sound_out_ds();
 				err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!(floating_point = IsVistaOrNewer()), 44 * 2, 100);
+				if (err && floating_point) err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = FALSE, 44 * 2, 100);
 			}
 			if (err) {
 				delete sound_driver;
