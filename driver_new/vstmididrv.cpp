@@ -61,7 +61,7 @@ static HANDLE hCalcThread = NULL;
 static DWORD processPriority;
 static HANDLE load_vstevent = NULL; 
 
-
+static BOOL com_initialized = FALSE;
 static sound_out * sound_driver = NULL;
 static VSTDriver * vst_driver = NULL;
 
@@ -303,10 +303,15 @@ reset:
 
 	while(opend == 0 && stop_thread == 0) {
 		Sleep(100);
+		if (!com_initialized) {
+			if (FAILED(CoInitialize(NULL))) continue;
+			com_initialized = TRUE;
+		}
 		if (sound_driver == NULL) {
 			sound_driver = create_sound_out_xaudio2();
 			const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = TRUE, 44 * 2, 60);
 			if (err) {
+				delete sound_driver;
 				sound_driver = create_sound_out_ds();
 				err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!(floating_point = IsVistaOrNewer()), 44 * 2, 100);
 			}
@@ -349,6 +354,7 @@ reset:
 	vst_driver = NULL;
 	delete sound_driver;
 	sound_driver = NULL;
+	CoUninitialize();
 	_endthreadex(0);
 	return 0;
 }
