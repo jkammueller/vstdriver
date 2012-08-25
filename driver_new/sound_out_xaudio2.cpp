@@ -1,5 +1,3 @@
-#include "stdafx.h"
-
 #include "sound_out.h"
 
 //#define HAVE_KS_HEADERS
@@ -110,8 +108,12 @@ public:
 	{
 		if ( InterlockedDecrement( &registered ) == 0 )
 		{
-			pEnumerator->UnregisterEndpointNotificationCallback( this );
-			pEnumerator->Release();
+			if (pEnumerator)
+			{
+				pEnumerator->UnregisterEndpointNotificationCallback( this );
+				pEnumerator->Release();
+				pEnumerator = NULL;
+			}
 			registered = false;
 		}
 

@@ -274,25 +274,6 @@ int vstsyn_play_some_data(void){
 	return played;
 }
 
-BOOL IsVistaOrNewer() {
-	static bool initialized = false;
-	static BOOL is_vista;
-	if (!initialized) {
-		OSVERSIONINFOEX osvi;
-		BOOL bOsVersionInfoEx;
-		ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
-		osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
-		bOsVersionInfoEx = GetVersionEx((OSVERSIONINFO*) &osvi);
-		if(bOsVersionInfoEx == FALSE) is_vista = FALSE;
-		else if ( VER_PLATFORM_WIN32_NT==osvi.dwPlatformId && 
-			osvi.dwMajorVersion > 5 )
-			is_vista = TRUE;
-		initialized = true;
-	}
-	return is_vista;
-}
-
-
 unsigned __stdcall threadfunc(LPVOID lpV){
 	unsigned i;
 	int opend;
@@ -313,8 +294,7 @@ reset:
 			if (err) {
 				delete sound_driver;
 				sound_driver = create_sound_out_ds();
-				err = sound_driver->open(GetDesktopWindow(), 44100, 2, !!(floating_point = IsVistaOrNewer()), 44 * 2, 100);
-				if (err && floating_point) err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = FALSE, 44 * 2, 100);
+				err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = FALSE, 44 * 2, 100);
 			}
 			if (err) {
 				delete sound_driver;
