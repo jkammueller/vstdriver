@@ -63,7 +63,7 @@ static HANDLE load_vstevent = NULL;
 
 static BOOL com_initialized = FALSE;
 static sound_out * sound_driver = NULL;
-static VSTDriver * vst_driver = NULL;
+static VSTDriver * vst_driver[2] = { NULL, NULL };
 
 static void DoStartDriver();
 static void DoStopDriver();
@@ -133,21 +133,28 @@ STDAPI_(LONG) DriverProc(DWORD dwDriverId, HDRVR hdrvr, UINT msg, LONG lParam1, 
 	return DRV_OK;
 }
 
-HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
+HRESULT modGetCaps(UINT uDeviceID, PVOID capsPtr, DWORD capsSize) {
 	MIDIOUTCAPSA * myCapsA;
 	MIDIOUTCAPSW * myCapsW;
 	MIDIOUTCAPS2A * myCaps2A;
 	MIDIOUTCAPS2W * myCaps2W;
 
-	CHAR synthName[] = "VST MIDI Synth\0";
-	WCHAR synthNameW[] = L"VST MIDI Synth\0";
+	CHAR synthName[] = "VST MIDI Synth";
+	WCHAR synthNameW[] = L"VST MIDI Synth";
+
+	CHAR synthPortA[] = " (port A)\0";
+	WCHAR synthPortAW[] = L" (port A)\0";
+
+	CHAR synthPortB[] = " (port B)\0";
+	WCHAR synthPortBW[] = L" (port B)\0";
 
 	switch (capsSize) {
 	case (sizeof(MIDIOUTCAPSA)):
 		myCapsA = (MIDIOUTCAPSA *)capsPtr;
 		myCapsA->wMid = MM_UNMAPPED;
 		myCapsA->wPid = MM_MPU401_MIDIOUT;
-		memcpy(myCapsA->szPname, synthName, sizeof(synthName));
+		memcpy(myCapsA->szPname, synthName, strlen(synthName));
+		memcpy(myCapsA->szPname + strlen(synthName), uDeviceID ? synthPortB : synthPortA, sizeof(synthPortA));
 		myCapsA->wTechnology = MOD_MIDIPORT;
 		myCapsA->vDriverVersion = 0x0090;
 		myCapsA->wVoices = 0;
@@ -160,7 +167,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 		myCapsW = (MIDIOUTCAPSW *)capsPtr;
 		myCapsW->wMid = MM_UNMAPPED;
 		myCapsW->wPid = MM_MPU401_MIDIOUT;
-		memcpy(myCapsW->szPname, synthNameW, sizeof(synthNameW));
+		memcpy(myCapsW->szPname, synthNameW, wcslen(synthNameW) * sizeof(wchar_t));
+		memcpy(myCapsW->szPname + wcslen(synthNameW), uDeviceID ? synthPortBW : synthPortAW, sizeof(synthPortAW));
 		myCapsW->wTechnology = MOD_MIDIPORT;
 		myCapsW->vDriverVersion = 0x0090;
 		myCapsW->wVoices = 0;
@@ -173,7 +181,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 		myCaps2A = (MIDIOUTCAPS2A *)capsPtr;
 		myCaps2A->wMid = MM_UNMAPPED;
 		myCaps2A->wPid = MM_MPU401_MIDIOUT;
-		memcpy(myCaps2A->szPname, synthName, sizeof(synthName));
+		memcpy(myCaps2A->szPname, synthName, strlen(synthName));
+		memcpy(myCaps2A->szPname + strlen(synthName), uDeviceID ? synthPortB : synthPortA, sizeof(synthPortA));
 		myCaps2A->wTechnology = MOD_MIDIPORT;
 		myCaps2A->vDriverVersion = 0x0090;
 		myCaps2A->wVoices = 0;
@@ -186,7 +195,8 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 		myCaps2W = (MIDIOUTCAPS2W *)capsPtr;
 		myCaps2W->wMid = MM_UNMAPPED;
 		myCaps2W->wPid = MM_MPU401_MIDIOUT;
-		memcpy(myCaps2W->szPname, synthNameW, sizeof(synthNameW));
+		memcpy(myCaps2W->szPname, synthNameW, wcslen(synthNameW) * sizeof(wchar_t));
+		memcpy(myCaps2W->szPname + wcslen(synthNameW), uDeviceID ? synthPortBW : synthPortAW, sizeof(synthPortAW));
 		myCaps2W->wTechnology = MOD_MIDIPORT;
 		myCaps2W->vDriverVersion = 0x0090;
 		myCaps2W->wVoices = 0;
@@ -202,6 +212,7 @@ HRESULT modGetCaps(PVOID capsPtr, DWORD capsSize) {
 
 
 struct evbuf_t{
+	UINT uDeviceID;
 	UINT uMsg;
 	DWORD	dwParam1;
 	DWORD	dwParam2;
@@ -223,6 +234,7 @@ int vstsyn_buf_check(void){
 }
 
 int vstsyn_play_some_data(void){
+	UINT uDeviceID;
 	UINT uMsg;
 	DWORD	dwParam1;
 	DWORD	dwParam2;
@@ -244,6 +256,7 @@ int vstsyn_play_some_data(void){
 			if (++evbrpoint >= EVBUFF_SIZE)
 					evbrpoint -= EVBUFF_SIZE;
 
+			uDeviceID=evbuf[evbpoint].uDeviceID;
 			uMsg=evbuf[evbpoint].uMsg;
 			dwParam1=evbuf[evbpoint].dwParam1;
 			dwParam2=evbuf[evbpoint].dwParam2;
@@ -253,7 +266,7 @@ int vstsyn_play_some_data(void){
 			LeaveCriticalSection(&mim_section);
 			switch (uMsg) {
 			case MODM_DATA:
-				vst_driver->ProcessMIDIMessage(dwParam1);
+				vst_driver[uDeviceID]->ProcessMIDIMessage(dwParam1);
 				break;
 			case MODM_LONGDATA:
 #ifdef DEBUG
@@ -266,7 +279,7 @@ int vstsyn_play_some_data(void){
 	}
 	fclose(logfile);
 #endif
-				vst_driver->ProcessSysEx(sysexbuffer, exlen);
+				vst_driver[uDeviceID]->ProcessSysEx(sysexbuffer, exlen);
 				free(sysexbuffer);
 				break;
 			}
@@ -302,10 +315,18 @@ reset:
 				continue;
 			}
 		}
-		vst_driver = new VSTDriver;
-		if (!vst_driver->OpenVSTDriver()) {
-			delete vst_driver;
-			vst_driver = NULL;
+		vst_driver[0] = new VSTDriver;
+		if (!vst_driver[0]->OpenVSTDriver()) {
+			delete vst_driver[0];
+			vst_driver[0] = NULL;
+			continue;
+		}
+		vst_driver[1] = new VSTDriver;
+		if (!vst_driver[1]->OpenVSTDriver()) {
+			delete vst_driver[1];
+			delete vst_driver[0];
+			vst_driver[1] = NULL;
+			vst_driver[0] = NULL;
 			continue;
 		}
 		if (load_vstevent) SetEvent(load_vstevent);
@@ -315,24 +336,40 @@ reset:
 	while(stop_thread == 0){
 		if (reset_synth != 0){
 			reset_synth = 0;
-			delete vst_driver;
-			vst_driver = NULL;
+			delete vst_driver[1];
+			delete vst_driver[0];
+			vst_driver[1] = NULL;
+			vst_driver[0] = NULL;
 			goto reset;
 		}
 		vstsyn_play_some_data();
 		if (floating_point) {
-			float sound_buffer[44 * 2];
-			vst_driver->RenderFloat( sound_buffer, 44 );
+			float sound_buffer[2][44 * 2];
+			vst_driver[0]->RenderFloat( sound_buffer[0], 44 );
+			vst_driver[1]->RenderFloat( sound_buffer[1], 44 );
+			for (unsigned i = 0; i < 44 * 2; i++)
+			{
+				sound_buffer[0][i] += sound_buffer[1][i];
+			}
 			sound_driver->write_frame( sound_buffer, 44 * 2, true );
 		} else {
-			short sound_buffer[44 * 2];
-			vst_driver->Render( sound_buffer, 44 );
+			short sound_buffer[2][44 * 2];
+			vst_driver[0]->Render( sound_buffer[0], 44 );
+			vst_driver[1]->Render( sound_buffer[1], 44 );
+			for (unsigned i = 0; i < 44 * 2; i++)
+			{
+				int sample = sound_buffer[0][i] + sound_buffer[1][i];
+				if ( ( sample + 0x8000 ) & 0xFFFF0000 ) sample = 0x7FFF ^ ( sample >> 31 );
+				sound_buffer[0][i] = sample;
+			}
 			sound_driver->write_frame( sound_buffer, 44 * 2, true );
 		}
 	}
 	stop_thread=0;
-	delete vst_driver;
-	vst_driver = NULL;
+	delete vst_driver[1];
+	delete vst_driver[0];
+	vst_driver[1] = NULL;
+	vst_driver[0] = NULL;
 	delete sound_driver;
 	sound_driver = NULL;
 	CoUninitialize();
@@ -467,7 +504,7 @@ STDAPI_(LONG) modMessage(UINT uDeviceID, UINT uMsg, DWORD dwUser, DWORD dwParam1
 		return MMSYSERR_NOTSUPPORTED;
 		break;
 	case MODM_GETDEVCAPS:
-		return modGetCaps((PVOID)dwParam1, dwParam2);
+		return modGetCaps(uDeviceID, (PVOID)dwParam1, dwParam2);
 		break;
 	case MODM_RESET:
 		DoResetDriver(dwParam1, dwParam2);
@@ -503,6 +540,7 @@ STDAPI_(LONG) modMessage(UINT uDeviceID, UINT uMsg, DWORD dwUser, DWORD dwParam1
 		evbpoint = evbwpoint;
 		if (++evbwpoint >= EVBUFF_SIZE)
 			evbwpoint -= EVBUFF_SIZE;
+		evbuf[evbpoint].uDeviceID = !!uDeviceID;
 		evbuf[evbpoint].uMsg = uMsg;
 		evbuf[evbpoint].dwParam1 = dwParam1;
 		evbuf[evbpoint].dwParam2 = dwParam2;
@@ -512,7 +550,7 @@ STDAPI_(LONG) modMessage(UINT uDeviceID, UINT uMsg, DWORD dwUser, DWORD dwParam1
 		return MMSYSERR_NOERROR;
 		break;		
 	case MODM_GETNUMDEVS:
-		return 0x1;
+		return 0x2;
 		break;
 	case MODM_CLOSE:
 		return DoCloseDriver(driver, uDeviceID, uMsg, dwUser, dwParam1, dwParam2);
