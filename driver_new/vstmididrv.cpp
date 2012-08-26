@@ -32,7 +32,7 @@ BOOL WINAPI DriverCallback( DWORD dwCallBack, DWORD dwFlags, HDRVR hdrvr, DWORD 
 #include "sound_out.h"
 #include "../driver/src/VSTDriver.h"
 
-#define MAX_DRIVERS 1
+#define MAX_DRIVERS 2
 #define MAX_CLIENTS 1 // Per driver
 
 struct Driver_Client {
