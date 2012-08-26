@@ -296,7 +296,7 @@ void VSTDriver::Render(short * samples, int len)
 		for ( int i = 0; i < len_todo * 2; i++ )
 		{
 			int sample = ( float_out[i] * 32768.f );
-			if ( sample != (short)sample ) sample = 0x7FFF ^ (sample >> 31);
+			if ( ( sample + 0x8000 ) & 0xFFFF0000 ) sample = 0x7FFF ^ (sample >> 31);
 			samples[0] = sample;
 			samples++;
 		}
