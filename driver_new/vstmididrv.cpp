@@ -63,14 +63,17 @@ static HANDLE load_vstevent = NULL;
 
 static BOOL com_initialized = FALSE;
 static sound_out * sound_driver = NULL;
-static VSTDriver * vst_driver[2] = { NULL, NULL };
+static VSTDriver * vst_driver = NULL;
 
 static void DoStartDriver();
 static void DoStopDriver();
 
+extern "C" HINSTANCE hinst_vst_driver = NULL;
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved ){
 	if (fdwReason == DLL_PROCESS_ATTACH){
 		DisableThreadLibraryCalls(hinstDLL);
+		hinst_vst_driver = hinstDLL;
 	}else if(fdwReason == DLL_PROCESS_DETACH){
 		;
 		DoStopDriver();
@@ -139,8 +142,14 @@ HRESULT modGetCaps(UINT uDeviceID, PVOID capsPtr, DWORD capsSize) {
 	MIDIOUTCAPS2A * myCaps2A;
 	MIDIOUTCAPS2W * myCaps2W;
 
+#if defined(AMD64) || defined(_WIN64)
+	// WinDDK         Visual Studio
+	CHAR synthName[] = "VST MIDI Synth 64";
+	WCHAR synthNameW[] = L"VST MIDI Synth 64";
+#else
 	CHAR synthName[] = "VST MIDI Synth";
 	WCHAR synthNameW[] = L"VST MIDI Synth";
+#endif
 
 	CHAR synthPortA[] = " (port A)\0";
 	WCHAR synthPortAW[] = L" (port A)\0";
@@ -266,7 +275,7 @@ int vstsyn_play_some_data(void){
 			LeaveCriticalSection(&mim_section);
 			switch (uMsg) {
 			case MODM_DATA:
-				vst_driver[uDeviceID]->ProcessMIDIMessage(dwParam1);
+				vst_driver->ProcessMIDIMessage(uDeviceID, dwParam1);
 				break;
 			case MODM_LONGDATA:
 #ifdef DEBUG
@@ -279,7 +288,7 @@ int vstsyn_play_some_data(void){
 	}
 	fclose(logfile);
 #endif
-				vst_driver[uDeviceID]->ProcessSysEx(sysexbuffer, exlen);
+				vst_driver->ProcessSysEx(uDeviceID, sysexbuffer, exlen);
 				free(sysexbuffer);
 				break;
 			}
@@ -315,18 +324,10 @@ reset:
 				continue;
 			}
 		}
-		vst_driver[0] = new VSTDriver;
-		if (!vst_driver[0]->OpenVSTDriver()) {
-			delete vst_driver[0];
-			vst_driver[0] = NULL;
-			continue;
-		}
-		vst_driver[1] = new VSTDriver;
-		if (!vst_driver[1]->OpenVSTDriver()) {
-			delete vst_driver[1];
-			delete vst_driver[0];
-			vst_driver[1] = NULL;
-			vst_driver[0] = NULL;
+		vst_driver = new VSTDriver;
+		if (!vst_driver->OpenVSTDriver()) {
+			delete vst_driver;
+			vst_driver = NULL;
 			continue;
 		}
 		if (load_vstevent) SetEvent(load_vstevent);
@@ -336,40 +337,24 @@ reset:
 	while(stop_thread == 0){
 		if (reset_synth != 0){
 			reset_synth = 0;
-			delete vst_driver[1];
-			delete vst_driver[0];
-			vst_driver[1] = NULL;
-			vst_driver[0] = NULL;
+			delete vst_driver;
+			vst_driver = NULL;
 			goto reset;
 		}
 		vstsyn_play_some_data();
 		if (floating_point) {
-			float sound_buffer[2][44 * 2];
-			vst_driver[0]->RenderFloat( sound_buffer[0], 44 );
-			vst_driver[1]->RenderFloat( sound_buffer[1], 44 );
-			for (unsigned i = 0; i < 44 * 2; i++)
-			{
-				sound_buffer[0][i] += sound_buffer[1][i];
-			}
+			float sound_buffer[44 * 2];
+			vst_driver->RenderFloat( sound_buffer, 44 );
 			sound_driver->write_frame( sound_buffer, 44 * 2, true );
 		} else {
-			short sound_buffer[2][44 * 2];
-			vst_driver[0]->Render( sound_buffer[0], 44 );
-			vst_driver[1]->Render( sound_buffer[1], 44 );
-			for (unsigned i = 0; i < 44 * 2; i++)
-			{
-				int sample = sound_buffer[0][i] + sound_buffer[1][i];
-				if ( ( sample + 0x8000 ) & 0xFFFF0000 ) sample = 0x7FFF ^ ( sample >> 31 );
-				sound_buffer[0][i] = sample;
-			}
+			short sound_buffer[44 * 2];
+			vst_driver->Render( sound_buffer, 44 );
 			sound_driver->write_frame( sound_buffer, 44 * 2, true );
 		}
 	}
 	stop_thread=0;
-	delete vst_driver[1];
-	delete vst_driver[0];
-	vst_driver[1] = NULL;
-	vst_driver[0] = NULL;
+	delete vst_driver;
+	vst_driver = NULL;
 	delete sound_driver;
 	sound_driver = NULL;
 	CoUninitialize();

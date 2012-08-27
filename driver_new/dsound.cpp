@@ -1,7 +1,10 @@
+#define STRICT
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT _WIN32_WINNT_WINXP
+#endif
+
 #include <InitGuid.h>
 
-#define _WIN32_WINNT 0x500
-#define STRICT
 #include <windows.h>
 
 //#define HAVE_KS_HEADERS
@@ -10,7 +13,7 @@
 #include <dsound.h>
 #include <mmreg.h>
 #include <assert.h>
-
+#include <math.h>
 #include <vector>
 
 #ifdef HAVE_KS_HEADERS
@@ -120,19 +123,7 @@ class ds_api_i : public ds_api
 
 	void g_thread_proc();
 
-	
-
-	void g_cleanup_thread()
-	{
-		CloseHandle(g_thread);
-		g_thread = 0;
-		g_thread_id = 0;
-		for ( unsigned i = 0; i < g_streams.size(); i++ ) delete g_streams[ i ];
-		g_streams.clear();
-		g_p_ds->Release();
-		g_p_ds = 0;
-	}
-
+	void g_cleanup_thread();
 	void g_thread_sleep()
 	{
 		assert(g_is_update_thread());
@@ -151,7 +142,7 @@ public:
 
 	critical_section g_sync;
 	ds_api_i(HWND);
-	~ds_api_i();
+	virtual ~ds_api_i();
 	virtual ds_stream * ds_stream_create(const ds_stream_config * cfg);
 	virtual void set_device(const GUID * id);
 	virtual void release();
@@ -165,7 +156,8 @@ class ds_stream_i : public ds_stream
 	critical_section & g_sync;
 
 	IDirectSoundBuffer * p_dsb;
-	unsigned srate,nch,bps;
+	unsigned srate;
+	unsigned short nch,bps;
 	circular_buffer incoming;
 	bool b_error;
 
@@ -181,6 +173,7 @@ class ds_stream_i : public ds_stream
 	bool pause_request;
 
 	double current_time;
+	double current_volume,requested_volume;
 	
 	unsigned buffer_ms;
 
@@ -191,6 +184,7 @@ class ds_stream_i : public ds_stream
 
 	void force_play_internal();
 	void flush_internal();
+	void set_volume_internal(double val);
 
 	ds_api_i * api;
 	bool b_release_requested;
@@ -200,7 +194,7 @@ public:
 	bool is_paused() {return paused;}
 
 	ds_stream_i(ds_api_i * p_api,const ds_stream_config * cfg);
-	~ds_stream_i();
+	virtual ~ds_stream_i();
 
 	virtual bool write(const void * data,unsigned bytes);
 	virtual bool is_playing();
@@ -212,6 +206,8 @@ public:
 	//destructor methods
 	virtual void release();
 
+	virtual bool set_volume(double val);
+
 	virtual bool pause(bool status);
 
 	virtual bool set_ratio(double ratio);
@@ -220,6 +216,16 @@ public:
 
 };
 
+void ds_api_i::g_cleanup_thread()
+{
+	CloseHandle(g_thread);
+	g_thread = 0;
+	g_thread_id = 0;
+	for ( unsigned i = 0; i < g_streams.size(); i++ ) delete g_streams[ i ];
+	g_streams.clear();
+	g_p_ds->Release();
+	g_p_ds = 0;
+}
 
 void ds_api_i::g_thread_proc()
 {
@@ -290,6 +296,8 @@ ds_stream_i::ds_stream_i(ds_api_i * p_api,const ds_stream_config * cfg)
 	latency_bytes = 0;
 	pause_request = false;
 	current_time = 0;
+	current_volume = -1;
+	requested_volume = 1;
 	p_dsb = 0;
 }
 
@@ -356,7 +364,7 @@ bool ds_stream_i::update()
 
 		DSBUFFERDESC desc;
 		desc.dwSize = sizeof(desc);
-		desc.dwFlags = DSBCAPS_GETCURRENTPOSITION2|DSBCAPS_STICKYFOCUS|DSBCAPS_GLOBALFOCUS|DSBCAPS_CTRLFREQUENCY;
+		desc.dwFlags = DSBCAPS_GETCURRENTPOSITION2|DSBCAPS_STICKYFOCUS|DSBCAPS_GLOBALFOCUS|DSBCAPS_CTRLFREQUENCY|DSBCAPS_CTRLVOLUME;
 		desc.dwBufferBytes = buffer_size = ms2bytes(buffer_size_ms);
 		desc.dwReserved = 0;
 		desc.lpwfxFormat = &wfx;
@@ -442,6 +450,11 @@ bool ds_stream_i::update()
 		b_force_play = false;
 	}
 
+
+	if (current_volume != requested_volume)
+	{
+		set_volume_internal(requested_volume);
+	}
 
 	if (pause_request!=paused)
 	{
@@ -616,6 +629,25 @@ void ds_stream_i::flush_internal()
 }
 
 
+void ds_stream_i::set_volume_internal(double val)
+{
+	if (p_dsb)
+	{
+		double vol_log = val>0 ? 20.0*log10(val) : -100.0;
+//		console::info(uStringPrintf("%06u",(unsigned)(-vol_log * 100)));
+		p_dsb->SetVolume(static_cast<long>(vol_log * 100));
+		current_volume = val;
+	}
+}
+
+bool ds_stream_i::set_volume(double val)
+{
+	insync(g_sync);
+	if (b_error) return false;
+	requested_volume = val;
+	return true;
+}
+
 bool ds_stream_i::pause(bool status)
 {
 	insync(g_sync);
@@ -634,7 +666,7 @@ bool ds_stream_i::set_ratio(double ratio)
 	if (b_error) return false;
 	else
 	{
-		if ( FAILED( p_dsb->SetFrequency( srate * ratio ) ) ) return false;
+		if ( FAILED( p_dsb->SetFrequency( static_cast<DWORD>(srate * ratio) ) ) ) return false;
 		else return true;
 	}
 }

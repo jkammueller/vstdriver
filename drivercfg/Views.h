@@ -6,11 +6,12 @@
 #include "utf8conv.h"
 using namespace std;
 using namespace utf8util;
-#include "../driver/src/inc/aeffect.h"
-#include "../driver/src/inc/aeffectx.h"
-#include "../common/settings.h"
+#include "../driver/src/VSTDriver.h"
 typedef AEffect* (*PluginEntryProc) (audioMasterCallback audioMaster);
 static INT_PTR CALLBACK EditorProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+// for VSTDriver
+extern "C" HINSTANCE hinst_vst_driver = NULL;
 
 struct MyDLGTEMPLATE: DLGTEMPLATE
 {
@@ -32,7 +33,7 @@ std::wstring stripExtension(const std::wstring& fileName)
 	return fileName;
 }
 
-void settings_load(AEffect * effect)
+void settings_load(VSTDriver * effect)
 {
 	ifstream file;
 	long lResult;
@@ -40,7 +41,7 @@ void settings_load(AEffect * effect)
 	ULONG size;
 	CRegKeyEx reg;
 	wstring fname;
-	lResult = reg.Create(HKEY_CURRENT_USER, L"Software\\VSTi Driver");
+	lResult = reg.Create(HKEY_CURRENT_USER, L"Software\\VSTi Driver", 0, 0, KEY_READ | KEY_WOW64_32KEY);
 	if (lResult == ERROR_SUCCESS){
 		lResult = reg.QueryStringValue(L"plugin",NULL,&size);
 		if (lResult == ERROR_SUCCESS) {
@@ -57,7 +58,7 @@ void settings_load(AEffect * effect)
 				vector<uint8_t> chunk;
 				chunk.resize( chunk_size );
 				file.read( (char*) chunk.data(), chunk_size );
-				setChunk( effect, chunk );
+				if (effect) effect->setChunk( chunk.data(), chunk_size );
 			}
 			file.close();
 		}
@@ -65,7 +66,7 @@ void settings_load(AEffect * effect)
 	}
 }
 
-void settings_save(AEffect * effect)
+void settings_save(VSTDriver * effect)
 {
 	ofstream file;
 	long lResult;
@@ -73,7 +74,7 @@ void settings_save(AEffect * effect)
 	ULONG size;
 	CRegKeyEx reg;
 	wstring fname;
-	lResult = reg.Create(HKEY_CURRENT_USER, L"Software\\VSTi Driver");
+	lResult = reg.Create(HKEY_CURRENT_USER, L"Software\\VSTi Driver", 0, 0, KEY_WRITE | KEY_WOW64_32KEY);
 	if (lResult == ERROR_SUCCESS){
 		lResult = reg.QueryStringValue(L"plugin",NULL,&size);
 		if (lResult == ERROR_SUCCESS) {
@@ -85,7 +86,7 @@ void settings_save(AEffect * effect)
 			if (file.good())
 			{
 				vector<uint8_t> chunk;
-				getChunk( effect, chunk );
+				if (effect) effect->getChunk( chunk );
 				file.write( ( const char * ) chunk.data(), chunk.size() );
 			}
 			file.close();
@@ -94,93 +95,6 @@ void settings_save(AEffect * effect)
 	}
 }
 
-INT_PTR CALLBACK EditorProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	
-	AEffect* effect;
-	switch(msg)
-	{
-	case WM_INITDIALOG :
-		{
-			SetWindowLongPtr(hwnd,GWLP_USERDATA,lParam);
-			effect = (AEffect*)GetWindowLongPtr(hwnd,GWLP_USERDATA);
-			SetWindowText (hwnd, L"VST Editor");
-			SetTimer (hwnd, 1, 20, 0);
-			if(effect)
-			{
-				settings_load(effect);
-				effect->dispatcher (effect, effEditOpen, 0, 0, hwnd, 0);
-				ERect* eRect = 0;
-				effect->dispatcher (effect, effEditGetRect, 0, 0, &eRect, 0);
-				if(eRect)
-				{
-					int width = eRect->right - eRect->left;
-					int height = eRect->bottom - eRect->top;
-					if(width < 100)
-						width = 100;
-					if(height < 100)
-						height = 100;
-					RECT wRect;
-					SetRect (&wRect, 0, 0, width, height);
-					AdjustWindowRectEx (&wRect, GetWindowLong (hwnd, GWL_STYLE), FALSE, GetWindowLong (hwnd, GWL_EXSTYLE));
-					width = wRect.right - wRect.left;
-					height = wRect.bottom - wRect.top;
-					SetWindowPos (hwnd, HWND_TOP, 0, 0, width, height, SWP_NOMOVE);
-				}
-			}
-		}
-		break;
-	case WM_TIMER :
-		effect = (AEffect*)GetWindowLongPtr(hwnd,GWLP_USERDATA);
-		if(effect)
-			effect->dispatcher (effect, effEditIdle, 0, 0, 0, 0);
-		break;
-	case WM_CLOSE :
-		{
-			effect = (AEffect*)GetWindowLongPtr(hwnd,GWLP_USERDATA);
-			KillTimer (hwnd, 1);
-			if(effect)
-			{
-				settings_save(effect);
-				effect->dispatcher (effect, effEditClose, 0, 0, 0, 0);
-			}
-
-			EndDialog (hwnd, IDOK);
-		}
-		break;
-	}
-
-	return 0;
-}
-
-
-
-static VstIntPtr VSTCALLBACK audioMaster(AEffect *effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void *ptr, float opt)
-{
-	switch (opcode)
-	{
-	case audioMasterVersion:
-		return 2400;
-	case audioMasterCurrentId:
-		if (effect) return effect->uniqueID;
-		break;
-	case audioMasterGetVendorString:
-		strncpy((char *)ptr, "Chris Moeller and mudlord", 64);
-		//strncpy((char *)ptr, "YAMAHA", 64);
-		break;
-	case audioMasterGetProductString:
-		strncpy((char *)ptr, "VSTiDriver", 64);
-		//strncpy((char *)ptr, "SOL/SQ01", 64);
-		break;
-	case audioMasterGetVendorVersion:
-		return 1337; // uhuhuhuhu
-		//return 0;
-	case audioMasterGetLanguage:
-		return kVstLangEnglish;
-	}
-
-	return 0;
-}
 using namespace std;
 using namespace utf8util;
 #if _MSC_VER > 1000
@@ -193,8 +107,7 @@ class CView1 : public CDialogImpl<CView1>
 	CButton vst_load, vst_configure;
 	CStatic vst_vendor, vst_effect, vst_product;
 	TCHAR vst_path[MAX_PATH];
-	HMODULE hDll;
-	AEffect    * effect;
+	VSTDriver * effect;
 public:
    enum { IDD = IDD_MAIN };
    BEGIN_MSG_MAP(CView1)
@@ -221,7 +134,7 @@ public:
 		   reg.Close();
 		   vst_info.SetWindowText(vst_path);
 		  load_vst(vst_path);
-		 if(effect) vst_configure.EnableWindow(!!(effect->flags & effFlagsHasEditor));
+		 if(effect) vst_configure.EnableWindow(effect->hasEditor());
 	   }
 	   
    }
@@ -245,7 +158,7 @@ public:
 			   reg.SetStringValue(L"plugin",szFileName);
 			   reg.Close();
 			   vst_info.SetWindowText(szFileName);
-			   vst_configure.EnableWindow(!!(effect->flags & effFlagsHasEditor));
+			   vst_configure.EnableWindow(effect->hasEditor());
 		   }
 		   // do stuff
 	   }
@@ -254,81 +167,51 @@ public:
 
    LRESULT OnButtonConfig(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/ )
    {
-	   if(effect && effect->flags & effFlagsHasEditor)
+	   if(effect && effect->hasEditor())
 	   {
-		   MyDLGTEMPLATE t;	
-		   t.style = WS_POPUPWINDOW|WS_DLGFRAME|DS_MODALFRAME|DS_CENTER;
-		   DialogBoxIndirectParam (GetModuleHandle (0), &t, 0, (DLGPROC)EditorProc, (LPARAM)effect);
+		   effect->displayEditorModal();
 	   }
 	   return 0;
    }
 
    void free_vst()
    {
-	   if (effect)
-	   {
-		   effect->dispatcher( effect, effClose, 0, 0, 0, 0 );
-		   effect = NULL;
-		   FreeLibrary( hDll );
-		   hDll = NULL;
-	   }
+	   delete effect;
+	   effect = NULL;
    }
 
    BOOL load_vst(TCHAR * szPluginPath)
    {
 	   free_vst();
-	   hDll = LoadLibrary( szPluginPath );
-	   if ( hDll ) {
-		   PluginEntryProc pMain = (PluginEntryProc) GetProcAddress( hDll, "main" );
-		   if ( pMain ) {
-			   effect = (*pMain)(&audioMaster);
-			   if ( effect ) {
-				   effect->dispatcher( effect, effOpen, 0, 0, 0, 0 );
-				   if ( !effect->dispatcher( effect, effGetPlugCategory, 0, 0, 0, 0 ) == kPlugCategSynth &&
-					   !effect->dispatcher( effect, effCanDo, 0, 0, "sendVstMidiEvent", 0 ) )
-				   {
-					   effect->dispatcher( effect, effClose, 0, 0, 0, 0 );
-					   effect = NULL;
-					   FreeLibrary( hDll );
-					   hDll = NULL;
-					   MessageBox(L"This is NOT a VSTi synth!");
-					   vst_effect.SetWindowText(L"No VSTi loaded");
-					   vst_vendor.SetWindowText(L"No VSTi loaded");
-					   vst_product.SetWindowText(L"No VSTi loaded");
-					   vst_info.SetWindowText(L"No VSTi loaded");
-					   return FALSE;
-				   }
-				   else
-				   {
-					   char effectName[256] = {0};
-					   char  vendorString[256] = {0};
-					   char  productString[256] = {0};
-					   string conv;  
-					   effect->dispatcher (effect, effGetEffectName, 0, 0, effectName, 0);
-					   conv = effectName;
-					   wstring effect_str = utf16_from_ansi(conv);
-					   vst_effect.SetWindowText(effect_str.c_str());
-					   effect->dispatcher (effect, effGetVendorString, 0, 0, vendorString, 0);
-					   conv = vendorString;
-					   wstring vendor_str = utf16_from_ansi(conv);
-					   vst_vendor.SetWindowText(vendor_str.c_str());
-					   effect->dispatcher (effect, effGetProductString, 0, 0, productString, 0);
-					   conv = productString;
-					   wstring product_str = utf16_from_ansi(conv);
-					   vst_product.SetWindowText(product_str.c_str());
-					    return TRUE;
-				   }
+	   effect = new VSTDriver;
+	   if (!effect->OpenVSTDriver())
+	   {
+		   delete effect;
+		   effect = NULL;
+		   MessageBox(L"This is NOT a VSTi synth!");
+		   vst_effect.SetWindowText(L"No VSTi loaded");
+		   vst_vendor.SetWindowText(L"No VSTi loaded");
+		   vst_product.SetWindowText(L"No VSTi loaded");
+		   vst_info.SetWindowText(L"No VSTi loaded");
+		   return FALSE;
+	   }
 
-			   }
-		   }
-		
-		}
-	   
+	   string conv;
+	   effect->getEffectName(conv);
+	   wstring effect_str = utf16_from_ansi(conv);
+	   vst_effect.SetWindowText(effect_str.c_str());
+	   effect->getVendorString(conv);
+	   wstring vendor_str = utf16_from_ansi(conv);
+	   vst_vendor.SetWindowText(vendor_str.c_str());
+	   effect->getProductString(conv);
+	   wstring product_str = utf16_from_ansi(conv);
+	   vst_product.SetWindowText(product_str.c_str());
+
+	   return TRUE;
    }
 
 	LRESULT OnInitDialogView1(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 	{
-		hDll = NULL;
 		effect = NULL;
 		vst_load= GetDlgItem(IDC_VSTLOAD);
 		vst_info = GetDlgItem(IDC_VSTLOADED);

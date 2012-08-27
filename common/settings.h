@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
-#include "../driver/src/inc/aeffect.h"
+#include "../external_packages/aeffect.h"
 
 template<typename T>
 static void append_be( std::vector<std::uint8_t> & out, const T & value )
