@@ -348,7 +348,7 @@ uint32_t VSTDriver::process_read_bytes_pass( void * out, uint32_t size )
 
 	if ( state == WAIT_OBJECT_0 && GetOverlappedResult( hChildStd, &ol, &bytesDone, TRUE ) ) return bytesDone;
 
-#if _WIN32_WINNT >= 0x600
+#if 0 && _WIN32_WINNT >= 0x600
 	CancelIoEx( hChildStd, &ol );
 #else
 	CancelIo( hChildStd );

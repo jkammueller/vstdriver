@@ -74,7 +74,6 @@ Section "Needed (required)"
    File output\64\vsthost64.exe
    SetOutPath $WINDIR\SysNative
    File output\64\vstmididrv.dll 
-   File output\64\vstmididrvcfg.exe
    File output\vsthost32.exe
    File output\64\vsthost64.exe
    ;check if already installed
@@ -157,7 +156,6 @@ REGDONE3:
    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\VST MIDI System Synth" "UninstallString" '"$WINDIR\SysWow64\vstmididrvuninstall.exe"'
    CreateShortCut "$SMPROGRAMS\VST MIDI System Synth\Uninstall.lnk" "$WINDIR\SysWow64\vstmididrvuninstall.exe" "" "$WINDIR\SysWow64\vstmididrvuninstall.exe" 0
    CreateShortCut "$SMPROGRAMS\VST MIDI System Synth\Configure Driver.lnk" "$WINDIR\SysWow64\vstmididrvcfg.exe" "" "$WINDIR\SysWow64\vstmididrvcfg.exe" 0
-   CreateShortCut "$SMPROGRAMS\VST MIDI System Synth\Configure Driver (64-bit).lnk" "$WINDIR\System32\vstmididrvcfg.exe" "" "$WINDIR\System32\vstmididrvcfg.exe" 0
    ${Else}
    WriteUninstaller "$WINDIR\System32\vstmididrvuninstall.exe"
    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\VST MIDI System Synth" "UninstallString" '"$WINDIR\System32\vstmididrvuninstall.exe"'
