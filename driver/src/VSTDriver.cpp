@@ -74,16 +74,18 @@ error:
 	return 0;
 }
 
-void VSTDriver::load_settings() {
+void VSTDriver::load_settings(TCHAR * szPath) {
 	HKEY hKey;
 	long lResult;
 	DWORD dwType=REG_SZ;
 	DWORD dwSize=0;
-	if ( RegOpenKeyEx(HKEY_CURRENT_USER, _T("Software\\VSTi Driver"),0,KEY_READ|KEY_WOW64_32KEY,&hKey) == ERROR_SUCCESS ) {
-		lResult = RegQueryValueEx(hKey, _T("plugin"), NULL, &dwType, NULL, &dwSize);
-		if ( lResult == ERROR_SUCCESS && dwType == REG_SZ ) {
+	if ( szPath || RegOpenKeyEx(HKEY_CURRENT_USER, _T("Software\\VSTi Driver"),0,KEY_READ|KEY_WOW64_32KEY,&hKey) == ERROR_SUCCESS ) {
+		if ( !szPath ) lResult = RegQueryValueEx(hKey, _T("plugin"), NULL, &dwType, NULL, &dwSize);
+		if ( szPath || ( lResult == ERROR_SUCCESS && dwType == REG_SZ ) ) {
+			if ( szPath ) dwSize = _tcslen( szPath ) * sizeof(TCHAR);
 			szPluginPath = (TCHAR*) calloc( dwSize + sizeof(TCHAR), 1 );
-			RegQueryValueEx(hKey, _T("plugin"), NULL, &dwType, (LPBYTE) szPluginPath, &dwSize);
+			if ( szPath ) _tcscpy( szPluginPath, szPath );
+			else RegQueryValueEx(hKey, _T("plugin"), NULL, &dwType, (LPBYTE) szPluginPath, &dwSize);
 
 			uPluginPlatform = test_plugin_platform();
 
@@ -107,7 +109,7 @@ void VSTDriver::load_settings() {
 				fclose( f );
 			}
 		}
-		RegCloseKey( hKey);
+		if ( !szPath ) RegCloseKey( hKey);
 	}
 }
 
@@ -478,10 +480,10 @@ void VSTDriver::CloseVSTDriver() {
 	}
 }
 
-BOOL VSTDriver::OpenVSTDriver() {
+BOOL VSTDriver::OpenVSTDriver(TCHAR * szPath) {
 	CloseVSTDriver();
 
-	load_settings();
+	load_settings(szPath);
 
 	if ( process_create() ) {
 		process_write_code( 5 );
@@ -494,10 +496,26 @@ BOOL VSTDriver::OpenVSTDriver() {
 			return FALSE;
 		}
 
+		process_write_code( 2 );
+		process_write_code( blChunk.size() );
+		process_write_bytes( blChunk.data(), blChunk.size() );
+
+		code = process_read_code();
+		if ( code != 0 ) {
+			process_terminate();
+			return FALSE;
+		}
+
 		return TRUE;
 	}
 
 	return FALSE;	
+}
+
+void VSTDriver::ResetDriver() {
+	process_write_code( 6 );
+	uint32_t code = process_read_code();
+	if ( code != 0 ) process_terminate();
 }
 
 void VSTDriver::ProcessMIDIMessage(DWORD dwPort, DWORD dwParam1) {

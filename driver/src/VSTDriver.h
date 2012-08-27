@@ -58,13 +58,14 @@ private:
 	void process_write_code( uint32_t code );
 	void process_write_bytes( const void * buffer, uint32_t size );
 
-	void load_settings();
+	void load_settings(TCHAR * szPath);
 
 public:
 	VSTDriver();
 	~VSTDriver();
 	void CloseVSTDriver();
-	BOOL OpenVSTDriver();
+	BOOL OpenVSTDriver(TCHAR * szPath = NULL);
+	void ResetDriver();
 	void ProcessMIDIMessage(DWORD dwPort, DWORD dwParam1);
 	void ProcessSysEx(DWORD dwPort, const unsigned char *sysexbuffer, int exlen);
 	void Render(short * samples, int len);

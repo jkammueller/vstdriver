@@ -154,7 +154,7 @@ public:
 			   HKEY hKey, hSubKey;
 			   long lResult;
 			   CRegKeyEx reg;
-			   lResult = reg.Create(HKEY_CURRENT_USER, L"Software\\VSTi Driver");
+			   lResult = reg.Create(HKEY_CURRENT_USER, L"Software\\VSTi Driver", 0, 0, KEY_WRITE | KEY_WOW64_32KEY);
 			   reg.SetStringValue(L"plugin",szFileName);
 			   reg.Close();
 			   vst_info.SetWindowText(szFileName);
@@ -169,13 +169,17 @@ public:
    {
 	   if(effect && effect->hasEditor())
 	   {
+		   HWND m_hWnd = GetAncestor(this->m_hWnd, GA_ROOT);
+		   ::EnableWindow(m_hWnd, FALSE);
 		   effect->displayEditorModal();
+		   ::EnableWindow(m_hWnd, TRUE);
 	   }
 	   return 0;
    }
 
    void free_vst()
    {
+	   settings_save( effect );
 	   delete effect;
 	   effect = NULL;
    }
@@ -184,7 +188,7 @@ public:
    {
 	   free_vst();
 	   effect = new VSTDriver;
-	   if (!effect->OpenVSTDriver())
+	   if (!effect->OpenVSTDriver(szPluginPath))
 	   {
 		   delete effect;
 		   effect = NULL;
@@ -206,6 +210,8 @@ public:
 	   effect->getProductString(conv);
 	   wstring product_str = utf16_from_ansi(conv);
 	   vst_product.SetWindowText(product_str.c_str());
+
+	   settings_load( effect );
 
 	   return TRUE;
    }
