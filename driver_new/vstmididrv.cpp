@@ -340,11 +340,11 @@ unsigned __stdcall threadfunc(LPVOID lpV){
 		vstsyn_play_some_data();
 		if (floating_point) {
 			float sound_buffer[SAMPLES_PER_FRAME];
-			vst_driver->RenderFloat( sound_buffer, SAMPLES_PER_FRAME / 2 );
+			vst_driver->RenderFloat( sound_buffer, SAMPLES_PER_FRAME / 2, sound_out_volume_float );
 			sound_driver->write_frame( sound_buffer, SAMPLES_PER_FRAME, true );
 		} else {
 			short sound_buffer[SAMPLES_PER_FRAME];
-			vst_driver->Render( sound_buffer, SAMPLES_PER_FRAME / 2 );
+			vst_driver->Render( sound_buffer, SAMPLES_PER_FRAME / 2, sound_out_volume_float );
 			sound_driver->write_frame( sound_buffer, SAMPLES_PER_FRAME, true );
 		}
 	}
@@ -496,7 +496,6 @@ STDAPI_(LONG) modMessage(UINT uDeviceID, UINT uMsg, DWORD dwUser, DWORD dwParam1
 						  }
 	case MODM_SETVOLUME: {
 		sound_out_volume_float = LOWORD(dwParam1) / (float)0xFFFF;
-		sound_driver->set_volume(sound_out_volume_float);
 		return MMSYSERR_NOERROR;
 						 }
 	case MODM_RESET:

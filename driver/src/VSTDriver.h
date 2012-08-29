@@ -68,8 +68,8 @@ public:
 	void ResetDriver();
 	void ProcessMIDIMessage(DWORD dwPort, DWORD dwParam1);
 	void ProcessSysEx(DWORD dwPort, const unsigned char *sysexbuffer, int exlen);
-	void Render(short * samples, int len);
-	void RenderFloat(float * samples, int len);
+	void Render(short * samples, int len, float volume = 1.0f);
+	void RenderFloat(float * samples, int len, float volume = 1.0f);
 
 	void getEffectName(std::string & out);
 	void getVendorString(std::string & out);
