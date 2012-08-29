@@ -184,6 +184,7 @@ Section "Uninstall"
   SetRegView 64
   WriteRegStr HKLM "Software\Microsoft\Windows NT\CurrentVersion\Drivers32" "$0" "$1"
   SetRegView 32
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\VST MIDI System Synth"
  ${If} ${AtLeastWinVista}
   Delete $WINDIR\SysWow64\vstmididrv.dll
   Delete $WINDIR\SysWow64\vstmididrvuninstall.exe
@@ -198,6 +199,7 @@ ${Else}
   Reboot
 ${Endif}
 ${Else}
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\VST MIDI System Synth"
 ${If} ${AtLeastWinVista}
   Delete $WINDIR\System32\vstmididrv.dll
   Delete $WINDIR\System32\vstmidiuninstall.exe
@@ -210,5 +212,4 @@ ${Else}
   Reboot
 ${Endif}
 ${EndIf}
-DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\VST MIDI System Synth"
 SectionEnd
