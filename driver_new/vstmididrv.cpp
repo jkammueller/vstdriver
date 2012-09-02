@@ -5,7 +5,7 @@
 //#define DEBUG
 #define STRICT
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0400
+#define _WIN32_WINNT _WIN32_WINNT_WINXP
 #endif
 
 #if __DMC__
@@ -35,8 +35,8 @@ BOOL WINAPI DriverCallback( DWORD dwCallBack, DWORD dwFlags, HDRVR hdrvr, DWORD 
 #define MAX_DRIVERS 2
 #define MAX_CLIENTS 1 // Per driver
 
-#define SAMPLES_PER_FRAME 128
-#define FRAMES_XAUDIO 20
+#define SAMPLES_PER_FRAME 88 * 2
+#define FRAMES_XAUDIO 15
 #define FRAMES_DSOUND 50
 #define SAMPLE_RATE_USED 44100
 
@@ -76,13 +76,47 @@ static void DoStopDriver();
 
 extern "C" HINSTANCE hinst_vst_driver = NULL;
 
+class message_window
+{
+	HWND m_hWnd;
+	ATOM class_atom;
+
+public:
+	message_window() {
+		static const TCHAR * class_name = _T("vstmididrv message window");
+		WNDCLASSEX cls = { 0 };
+		cls.cbSize = sizeof(cls);
+		cls.lpfnWndProc = DefWindowProc;
+		cls.hInstance = hinst_vst_driver;
+		cls.lpszClassName = class_name;
+		class_atom = RegisterClassEx( &cls );
+		if ( class_atom ) {
+			m_hWnd = CreateWindowEx( 0, (LPCTSTR) class_atom, _T("vstmididrv"), 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, hinst_vst_driver, NULL );
+		} else {
+			m_hWnd = NULL;
+		}
+	}
+
+	~message_window()
+	{
+		if ( IsWindow( m_hWnd ) ) DestroyWindow( m_hWnd );
+		if ( class_atom ) UnregisterClass( (LPCTSTR) class_atom, hinst_vst_driver );
+	}
+
+	HWND get_hwnd() const { return m_hWnd; }
+};
+
+message_window * g_msgwnd = NULL;
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved ){
 	if (fdwReason == DLL_PROCESS_ATTACH){
 		DisableThreadLibraryCalls(hinstDLL);
 		hinst_vst_driver = hinstDLL;
+		g_msgwnd = new message_window;
 	}else if(fdwReason == DLL_PROCESS_DETACH){
 		;
 		DoStopDriver();
+		delete g_msgwnd;
 	}
 	return TRUE;    
 }
@@ -310,11 +344,11 @@ unsigned __stdcall threadfunc(LPVOID lpV){
 		}
 		if (sound_driver == NULL) {
 			sound_driver = create_sound_out_xaudio2();
-			const char * err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = TRUE, SAMPLES_PER_FRAME, FRAMES_XAUDIO);
+			const char * err = sound_driver->open(g_msgwnd->get_hwnd(), 44100, 2, floating_point = TRUE, SAMPLES_PER_FRAME, FRAMES_XAUDIO);
 			if (err) {
 				delete sound_driver;
 				sound_driver = create_sound_out_ds();
-				err = sound_driver->open(GetDesktopWindow(), 44100, 2, floating_point = FALSE, SAMPLES_PER_FRAME, FRAMES_DSOUND);
+				err = sound_driver->open(g_msgwnd->get_hwnd(), 44100, 2, floating_point = FALSE, SAMPLES_PER_FRAME, FRAMES_DSOUND);
 			}
 			if (err) {
 				delete sound_driver;
